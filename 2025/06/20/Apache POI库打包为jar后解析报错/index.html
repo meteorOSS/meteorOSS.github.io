@@ -13,7 +13,7 @@ html.dataset.dark = localStorage.dark;
 <p>搜了一圈答案都和实际不符，最后在 <a target="_blank" rel="noopener" href="https://stackoverflow.com/questions/67884617/apache-poi-excel-writer-works-in-ide-but-not-in-fat-jar-java-io-ioexception-yo">https://stackoverflow.com/questions/67884617/apache-poi-excel-writer-works-in-ide-but-not-in-fat-jar-java-io-ioexception-yo</a> 这个帖子下找到了答案</p>
 <p>问题的根本是:</p>
 <blockquote>
-<p>。Apache POI使用META-INF&#x2F;services目录下的文件来识别可用的服务提供者。</p>
+<p>Apache POI使用META-INF&#x2F;services目录下的文件来识别可用的服务提供者。</p>
 <p>当使用Maven的maven-assembly-plugin打包成fat JAR时，来自poi和poi-ooxml的重名服务提供者文件没有被正确合并，导致在运行时只有一个提供者可用，无法正确处理Excel文件。</p>
 </blockquote>
 <p>什么是服务提供者呢？这是一种服务发现机制，即 <code>Java SPI (Service Provider Interface)</code> ，允许应用程序动态发现和加载服务实现。它基于以下约定：</p>
