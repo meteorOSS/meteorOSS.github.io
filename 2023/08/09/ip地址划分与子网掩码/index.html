@@ -1,0 +1,91 @@
+<!DOCTYPE html><html lang="en"><head><meta http-equiv="content-type" content="text/html; charset=utf-8"><meta content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=0" name="viewport"><meta content="yes" name="apple-mobile-web-app-capable"><meta content="black-translucent" name="apple-mobile-web-app-status-bar-style"><meta content="telephone=no" name="format-detection"><meta name="description" content="zsh-blog"><title>ip地址划分与子网掩码 | meteor(zsh)</title><link rel="stylesheet" type="text/css" href="/css/style.css?v=1.0.0"><link rel="stylesheet" type="text/css" href="//lib.baomitu.com/normalize/latest/normalize.min.css"><link rel="stylesheet" type="text/css" href="//lib.baomitu.com/pure/latest/pure-min.min.css"><link rel="stylesheet" type="text/css" href="//lib.baomitu.com/pure/latest/grids-responsive-min.min.css"><link rel="stylesheet" href="//lib.baomitu.com/font-awesome/4.7.0/css/font-awesome.min.css"><script type="text/javascript" src="//lib.baomitu.com/jquery/latest/jquery.min.js"></script><link rel="icon" mask="" sizes="any" href="/favicon.ico"><link rel="Shortcut Icon" type="image/x-icon" href="/favicon.ico"><link rel="apple-touch-icon" href="/apple-touch-icon.png"><link rel="apple-touch-icon-precomposed" href="/apple-touch-icon.png"><script type="text/javascript" src="//lib.baomitu.com/clipboard.js/latest/clipboard.min.js"></script><script type="text/javascript" src="//lib.baomitu.com/toastr.js/latest/toastr.min.js"></script><link rel="stylesheet" href="//lib.baomitu.com/toastr.js/latest/toastr.min.css"><div class="darkmode-toggle">🌓</div><script>var prefersDarkMode = window.matchMedia('(prefers-color-scheme: dark)');
+var toggle = document.querySelector('.darkmode-toggle');
+var html = document.querySelector('html');
+
+html.dataset.dark = localStorage.dark || prefersDarkMode.matches;
+
+toggle.addEventListener('click', () => {
+localStorage.dark = !(html.dataset.dark == 'true');
+html.dataset.dark = localStorage.dark;
+});</script><meta name="generator" content="Hexo 7.3.0"></head><body><div class="body_container"><div id="header"><div class="site-name"><h1 class="hidden">ip地址划分与子网掩码</h1><a id="logo" href="/.">meteor(zsh)</a><p class="description"></p></div><div id="nav-menu"><a class="current" href="/."><i class="fa fa-home"> 首页</i></a><a href="/archives/"><i class="fa fa-archive"> 归档</i></a><a href="/about/"><i class="fa fa-user"> 简历</i></a><a href="/atom.xml"><i class="fa fa-rss"> 订阅</i></a></div></div><div class="pure-g" id="layout"><div class="pure-u-1 pure-u-md-3-4"><div class="content_container"><div class="post"><h1 class="post-title">ip地址划分与子网掩码</h1><div class="post-meta">2023-08-09<script src="https://busuanzi.ibruce.info/busuanzi/2.3/busuanzi.pure.mini.js" async></script><span id="busuanzi_container_page_pv"> | <span id="busuanzi_value_page_pv"></span><span> 阅读</span></span><span class="post-time"><span class="post-meta-item-text"> | </span><span class="post-meta-item-icon"><i class="fa fa-keyboard-o"></i><span class="post-count"> 1.5k</span><span class="post-meta-item-text"> 字</span></span></span><span class="post-time"> | <span class="post-meta-item-icon"><i class="fa fa-clock-o"></i><span class="post-count"> 5</span><span class="post-meta-item-text"> 分钟</span></span></span></div><div class="post-content"><h2 id="ip地址的划分"><a href="#ip地址的划分" class="headerlink" title="ip地址的划分:"></a>ip地址的划分:</h2><p>ip的范围是0.0.0.0~255.255.255.255,它的由来是32位的二进制。为了方便记忆将他们拆分为四组(以.分割)，每组由8位二进制组成</p>
+<blockquote>
+<p>a类 1.0.0.1 ~ 126.255.255.254</p>
+<p>0&lt;a类&lt;127 128个大网段</p>
+<p>b类 128.0.0.1~192.255.255.254</p>
+<p>128&lt;&#x3D;b类&lt;192 64个大网段</p>
+<p>c类 192.0.0.1 ~ 223.255.255.254 32个大网段</p>
+<p>d类 组播,vrrp协议,keepalive高可用224~239</p>
+<p>e类 科研240…~255….</p>
+</blockquote>
+<p>(00000000)bit全1下为(255)dec(2^8&#x3D;255),于是最大就只能取到255.255.255.255</p>
+<p>照这样推算，总的ip地址量约有43e个，而全球人口有80e之多。且不提不够人手一个ip地址，现如今一个人也不止一台设备需要上网，那么怎么解决这个问题呢?</p>
+<p>为了缓解ipv4地址耗尽，诸多的技术应运而生</p>
+<h2 id="NAT"><a href="#NAT" class="headerlink" title="NAT"></a>NAT</h2><p>NAT全程为Network Address Translation,意为网络地址转换，当内网用户访问公文时，如果网关设备(路由器)部署了NAT，设备会将接收到的IP数据报文中的IP地址转换为一个唯一的ip转发给公网。因此设备可以用一个公网地址来转换多个内网用户发过来的数据包报文，从而达到地址复用的目的</p>
+<p>在如今，最小的局域网都能支持上千万台设备进行访问。现如今家庭使用的宽带也是一个链接了无数个用户的大型局域网</p>
+<h2 id="内网ip网段"><a href="#内网ip网段" class="headerlink" title="内网ip网段:"></a>内网ip网段:</h2><p>a 10.0.0.0~10.255.255.255</p>
+<p>b 176.16.0.0~172.31.255.255</p>
+<p>c 192.168.0.0~192.168.255.255</p>
+<p>除了内网网段以外，都属于公网。</p>
+<p>一般路由器仅分配c类网段使用，最大65536，这就够用了</p>
+<h2 id="iPV6"><a href="#iPV6" class="headerlink" title="iPV6:"></a>iPV6:</h2><p>就算使用了NAT技术，ipv4地址也总有耗尽的一天。如上文所述，ipv4的长度是32位，那么用更多的位数不就好了？这就是IPV6了</p>
+<p>IPV6有着128位的长度，它号称能给予全球的每一颗沙子一个ip地址</p>
+<blockquote>
+<p>fe80::2c4:3412:e85c:a787%3</p>
+</blockquote>
+<p>在16进制下，它的表示范围比ipv4多的多，但作为1996年诞生的标准，直至今日也未能完全普及。从网上摘过来的:</p>
+<blockquote>
+<p><strong>第一：不好管控</strong></p>
+<p>v6时代每台设备都能有独立ip，这也就意味着向公网提供服务的门槛大幅度降低了，也就是说，违法犯罪的成本被降低了。</p>
+<p><strong>第二：难以控制</strong></p>
+<p>IPV6还有一大特点就是全面使用IPSec，数据传输经过加密，安全性大增。但这种情况下会让DNS污染这类手段失效，海量的IP又封不过来。如果这个技术问题解决，IPv6的推广会快很多，而不仅仅只局限于教育网等本身就容易控制的网络。</p>
+<p><strong>第三：大部分路由器依然不支持ipv6</strong></p>
+<p>目前淘宝tplink等低端路由器厂家在售的很多路由器依然不支持v6，有很多家庭用的是营业厅送的光猫和路由器，也不支持v6。是的你没听错，运营商的宽带支持v6但是他给的光猫不支持v6。开启v6支持需要宽带，光猫，路由器和终端这四者同时支持才行，缺一不可。这一点在目前应该是最大的阻力</p>
+<p><strong>第四：总宽带很低</strong></p>
+<p>目前v6处于刚发展阶段，之前广东的v6只能省内访问，出口宽带简直跟没有一样，现在好很多了。</p>
+</blockquote>
+<p>不过我觉得靠谱的说法还是当时陈旧的设备舍不得丢，大家都没着急上ipv6，暂时用nat缓缓，后面再说</p>
+<p>扯了这么多概念，对于单纯的软件开发从业人员来说什么帮助呢，就算不是为了应试，光记住ip段，也大有作用的地方。试想有一天服务蹦了，一看监控，大部分攻击都是从内网网段打出，那么可以很快推断出内部某台服务器可能被渗透当肉鸡了（或者有内鬼？hh)</p>
+<h2 id="子网掩码的作用"><a href="#子网掩码的作用" class="headerlink" title="子网掩码的作用:"></a>子网掩码的作用:</h2><p>子网掩码的作用是决定一个网段的大小，须知只有在同一个网段内才能互相进行通讯</p>
+<p><img src="http://cdn.zsenhe.com/5c44706aff644117bb9e0d2924ec9753" alt="image.png"></p>
+<p>有的时候也会表示成 192.168.19.11&#x2F;24，它表示成二进制</p>
+<p>(11000000 10101000 00010011 00001011)bit</p>
+<p>它可以表示为:</p>
+<p>11111111 11111111 11111111 00000000</p>
+<p>其中前面的24个1为网络位，后面0部分为主机位。</p>
+<blockquote>
+<p>(11111111 11111111 11111111 00000000)bit &#x3D; 255.255.255.0 &#x3D; 24</p>
+</blockquote>
+<p>只要网络位相同，我们称之为同一个网段。根据ip地址加子网掩码，即可以推算出该网段的范围</p>
+<p>如上图的 192.168.1.108&#x2F;24，该网段的可用ip范围</p>
+<blockquote>
+<p>(192.168.1.0 ~ 192.168.1.255)</p>
+<p>注意是开区间，左右端点一般保留作为网络号和广播地址</p>
+<p>实际可用的范围是192.168.1.1 ~ 192.168.1.254</p>
+<p>前者称为起始ip，后者为结束ip</p>
+</blockquote>
+<p>使用CPT来做同网段通讯实验</p>
+<p><img src="http://cdn.zsenhe.com/fc2a548f440541d9adadf5b8603e0593" alt="image.png"></p>
+<p>pc0为:</p>
+<p>192.168.100.126&#x2F;25</p>
+<p>pc1为:</p>
+<p>192.168.100.129&#x2F;25</p>
+<p><img src="http://cdn.zsenhe.com/bd666affba8f4b1bac9bb6fd9a762180" alt="20230809182023image.png"><br>使用PC0pingPC1,结果是<br><img src="http://cdn.zsenhe.com/b327dd7da25d4954b6b2436a06b9c771" alt="20230809182214image.png"><br>为什么ping不通呢，看着是一个网段啊。计算一下两个ip所属的网段</p>
+<blockquote>
+<p>看一下pc0的所在网段</p>
+<p>11000000 10101000 01100100 01111110</p>
+<p>子网掩码: 1…1 1…1 1…1 10000000</p>
+<p>那么pc0的网段ip为 (192.168.100.0,192.168.100.127)</p>
+<p>跟pc1明显不在同一个网段，肯定是ping不通了</p>
+</blockquote>
+<p>将两个设备的子网掩码都改为24，就没问题了<br><img src="http://cdn.zsenhe.com/bc12df4f898a4779b2b3e5282063df3b" alt="20230809183155image.png"><br>不同网段之间的通讯需要借助路由器进行转发</p>
+</div><div id="donate"><link rel="stylesheet" type="text/css" href="/css/donate.css?v=1.0.0"><script type="text/javascript" src="/js/donate.js?v=1.0.0" successtext="复制成功！"></script><a class="pos-f tr3" id="github" href="https://github.com/meteorOSS" target="_blank" title="Github"></a><div id="DonateText">Donate</div><ul class="list pos-f" id="donateBox"><li id="AliPay" qr="/img/alipay.png"></li><li id="WeChat" qr="/img/wechatqrcode.png"></li></ul><div class="pos-f left-100" id="QRBox"><div id="MainBox"></div></div></div><div class="post-copyright"><script type="text/javascript" src="/js/copyright.js?v=1.0.0" successtext="复制成功！"></script><link rel="stylesheet" type="text/css" href="/css/copyright.css?v=1.0.0"><p><span>本文标题：</span>ip地址划分与子网掩码</p><p><span>文章作者：</span>meteor</p><p><span>发布时间：</span>2023-08-09</p><p><span>最后更新：</span>2023-08-09</p><p><span>原始链接：</span><a href="/2023/08/09/ip地址划分与子网掩码/">http://blog.zsenhe.com/2023/08/09/ip%E5%9C%B0%E5%9D%80%E5%88%92%E5%88%86%E4%B8%8E%E5%AD%90%E7%BD%91%E6%8E%A9%E7%A0%81/</a><span class="copy-path"><i class="fa fa-clipboard" data-clipboard-text="http://blog.zsenhe.com/2023/08/09/ip%E5%9C%B0%E5%9D%80%E5%88%92%E5%88%86%E4%B8%8E%E5%AD%90%E7%BD%91%E6%8E%A9%E7%A0%81/"></i></span></p><p><span>版权声明：</span>本博客所有文章除特别声明外，均采用 <a href="http://creativecommons.org/licenses/by-nc-sa/3.0/cn/" rel="external nofollow" target="_blank">CC BY-NC-SA 3.0 CN</a> 许可协议。转载请注明出处！</p></div><br><script type="text/javascript" src="/js/share.js?v=1.0.0" async></script><a class="article-share-link" data-url="http://blog.zsenhe.com/2023/08/09/ip%E5%9C%B0%E5%9D%80%E5%88%92%E5%88%86%E4%B8%8E%E5%AD%90%E7%BD%91%E6%8E%A9%E7%A0%81/" data-id="cltjxfwh3000gi4v10gol5t37" data-qrcode="data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAQ4AAAEOCAAAAABd2qZ5AAAD7ElEQVR42u3bQW7jQAwEQP//0wmwpwUSy93kyM6hdDISezQqHxhyOo9HfH39u/5/PftJsvL1e36u//O6Xu3AhQMHDhw4gkdNlr6+Qf4wz+6efAE56/UKT1fDgQMHDhyHONobXG90U3qTXV2vNivzOHDgwIHj/RzXBTIplptG8XrN2d1x4MCBA8df4GgbvKT9y0eBG1wcOHDgwPFOjv0RTrvCZuSXH0TdOCvFgQMHDhxdvSuK7t9/fXu+AwcOHDhwBOUnL0inCnMbR5g9xdPVcODAgQPHmiOPCMyKbhu220QfNl9GnZjAgQMHDhwlR1vG2iFjW2Lb/mtzhIYDBw4cODYcxTF/XN7aA6R2zeTBhjE7HDhw4MCx5jgVU8t/st9u8qlZyceBAwcOHHuO9jbtqC4pk3kAbnaIVRRsHDhw4MBxiCNfaFYmNyHsffFOcHHgwIEDxymO2bZmMYh8XLgZBc7CGThw4MCB426O9ogoL72zFis/1mpBhz0oDhw4cOCIOdomahZQyEPe+6OmthHFgQMHDhwbjllp3AwBN7GD9qipjmvgwIEDB47bOPJNtBXq1MCxXT8KUuDAgQMHjqMceUM1G+e10Jsjpby0F8lBHDhw4MBRnu/Pggiz46VZ0CF//2b/OHDgwIFjw3E2IpAX4Ha0txliFu0oDhw4cOA4xJHfcnbs1K4/+9Tma8OBAwcOHGc58pj1fqNtIZyV9vy+j/aBceDAgQNHMGHbBM5apnz42B5ZtdeLKDYOHDhw4FhzzJqrtpglrdps4JjARYEGHDhw4MCx5pgN1/aBg83rtmnMx4g4cODAgWPDkY/t8kFhW/A2kbtZfOHpHnDgwIEDxyGO2eCvjT4nRXrTCrafxYEDBw4cn+JoYwr5YyfBuNlwcFjyceDAgQPHIY42xHBqGLcBmlXGF7vFgQMHDhyHOPIiOiPIG7y2TM7K/4tjJxw4cODAsebYNFRJYZsF2pIDsM0X+TQziAMHDhw41hz3Fbn2WCtv1drgRfQV4sCBAweOQxxJcdpEq/PftsPBfdgCBw4cOHDcwZG3W/lD7o+j8kZu1s69mJXiwIEDB475/ot/tsnDB9erbYLaeVSuLck4cODAgWPP8VVem60kkbUWpY3EvdgbDhw4cOBYc7QFL18iRzz1Om8sN2E+HDhw4MCRcGwCAXm4IX/PpkhvRo04cODAgeMsRz1TjJuftrYnLeJs1FiMCHHgwIEDx1s49qV0FpXb3yVfGQcOHDhwfJbjVJm8bufaPwXa1XDgwIEDxx0cs+HgrHxu2sU83PCBWSkOHDhw4FhvN4+p5YGGTZStbTuHQ0YcOHDgwPH7rr4BbsKv8rSKvZcAAAAASUVORK5CYII=">分享</a><div class="tags"></div><div class="post-nav"><a class="pre" href="/2023/08/10/%E5%AE%9E%E7%8E%B0%E5%BE%AE%E4%BF%A1%E5%B0%8F%E6%B8%B8%E6%88%8F%E5%B9%BF%E5%91%8A%E4%B8%AD%E7%9A%84%E2%80%9C%E6%AD%A6%E5%99%A8%E5%9B%B4%E7%9D%80%E5%B0%8F%E4%BA%BA%E8%BD%AC%E2%80%9D/">实现微信小游戏广告中的“武器围着小人转”</a><a class="next" href="/2023/08/08/osi%E4%B8%83%E5%B1%82%E6%A8%A1%E5%9E%8B%E4%B8%8E%E6%95%B0%E6%8D%AE%E7%9A%84%E5%B0%81%E8%A3%85%E8%A7%A3%E5%B0%81%E8%A3%85/">osi七层模型与数据的封装解封装</a></div><div id="container"></div><link rel="stylesheet" type="text/css" href="//unpkg.com/gitalk/dist/gitalk.css"><script type="text/javascript" src="//cdn.bootcss.com/blueimp-md5/2.10.0/js/md5.js"></script><script type="text/javascript" src="//unpkg.com/gitalk/dist/gitalk.min.js"></script><script>var gitalk = new Gitalk({
+  clientID: 'fc8322a9d1f9189c3ef4',
+  clientSecret: '7751271047d80dd7010063d51400bbbcb9dd3e69',
+  repo: 'meteorOSS.github.io',
+  owner: 'meteoross',
+  admin: ['meteoross'],
+  id: md5(location.pathname),
+  distractionFreeMode: false
+})
+gitalk.render('container')
+</script></div></div></div><div class="pure-u-1-4 hidden_mid_and_down"><div id="sidebar"><div class="widget"><form class="search-form" action="//www.google.com/search" method="get" accept-charset="utf-8" target="_blank"><input type="text" name="q" maxlength="20" placeholder="Search"/><input type="hidden" name="sitesearch" value="http://blog.zsenhe.com"/></form></div><div class="widget"><div class="author-info"><a class="info-avatar" href="/about/" title="简历"><img class="nofancybox" src="/img/avatar.png"/></a><p>我躺在柔软的床上冥想着没有时间的空间</p><a class="info-icon" href="https://twitter.com/username" title="Twitter" target="_blank" style="margin-inline:5px"> <i class="fa fa-twitter-square" style="margin-inline:5px"></i></a><a class="info-icon" href="mailto:zhengsenhe1027@126.com" title="Email" target="_blank" style="margin-inline:5px"> <i class="fa fa-envelope-square" style="margin-inline:5px"></i></a><a class="info-icon" href="https://github.com/meteorOSS" title="Github" target="_blank" style="margin-inline:5px"> <i class="fa fa-github-square" style="margin-inline:5px"></i></a><a class="info-icon" href="/atom.xml" title="RSS" target="_blank" style="margin-inline:5px"> <i class="fa fa-rss-square" style="margin-inline:5px"></i></a></div></div><div class="widget"><div class="widget-title"><i class="fa fa-folder-o"> 分类</i></div></div><div class="widget"><div class="widget-title"><i class="fa fa-star-o"> 标签</i></div><div class="tagcloud"></div></div><div class="widget"><div class="widget-title"><i class="fa fa-file-o"> 最近文章</i></div><ul class="post-list"><li class="post-list-item"><a class="post-list-link" href="/2024/03/07/hello-world/">我将博客迁移到了这里</a></li><li class="post-list-item"><a class="post-list-link" href="/2023/12/05/%E8%BF%90%E8%A1%8C%E6%97%B6%E5%8A%A8%E6%80%81%E8%BD%BD%E5%85%A5%E4%BE%9D%E8%B5%96/">运行时动态载入依赖</a></li><li class="post-list-item"><a class="post-list-link" href="/2023/11/29/GoReplaceTool%20%E6%8C%87%E5%AE%9A%E7%9B%AE%E6%A0%87%E7%9B%AE%E5%BD%95%E6%89%B9%E9%87%8F%E6%9B%BF%E6%8D%A2%E5%B7%A5%E5%85%B7/">GoReplaceTool 指定目标目录批量替换工具</a></li><li class="post-list-item"><a class="post-list-link" href="/2023/10/26/XPath%E4%B8%8EMyBatis%E8%A7%A3%E6%9E%90%E5%99%A8%E6%A8%A1%E5%9D%97XPathParser/">XPath与MyBatis解析器模块XPathParser</a></li><li class="post-list-item"><a class="post-list-link" href="/2023/10/26/XML%E5%B8%B8%E8%A7%81%E7%9A%84%E8%A7%A3%E6%9E%90%E6%96%B9%E5%BC%8F/">XML常见的解析方式</a></li><li class="post-list-item"><a class="post-list-link" href="/2023/10/06/%E4%B8%80%E5%9D%97%E9%92%B1%E6%8E%89%E5%9C%B0%E4%B8%8A%EF%BC%8C%E7%A2%8E%E6%88%90%E4%BA%86%E4%B8%A4%E5%BC%A0%E4%BA%94%E6%AF%9B/">一块钱掉地上，碎成了两张五毛</a></li><li class="post-list-item"><a class="post-list-link" href="/2023/09/10/%E8%AF%A5%E6%AD%BB%E7%9A%84%E5%8F%8D%E5%B0%84%E8%AF%A5%E6%AD%BB%E7%9A%84%E5%8F%8D%E5%B0%84%E8%AF%A5%E6%AD%BB%E7%9A%84%E5%8F%8D%E5%B0%84%E8%AF%A5%E6%AD%BB%E7%9A%84%E5%8F%8D%E5%B0%84%E8%AF%A5%E6%AD%BB%E7%9A%84%E5%8F%8D%E5%B0%84/">该死的反射该死的反射该死的反射该死的反射该死的反射</a></li><li class="post-list-item"><a class="post-list-link" href="/2023/08/31/%E5%9F%BA%E4%BA%8E%E7%88%B1%E5%8F%91%E7%94%B5%E7%9A%84spigot%E6%9C%8D%E5%8A%A1%E5%99%A8%E8%87%AA%E5%8A%A8%E5%85%85%E5%80%BC%E5%8F%91%E8%B4%A7/">基于爱发电的spigot服务器自动充值发货</a></li><li class="post-list-item"><a class="post-list-link" href="/2023/08/25/CMS%E4%B8%8E%E4%B8%89%E8%89%B2%E6%A0%87%E8%AE%B0%E7%AE%97%E6%B3%95/">CMS与三色标记算法</a></li><li class="post-list-item"><a class="post-list-link" href="/2023/08/24/GC%E5%9E%83%E5%9C%BE%E5%9B%9E%E6%94%B6%E5%8F%8A%E5%8E%86%E5%8F%B2%E6%BC%94%E8%BF%9B/">GC垃圾回收及历史演进</a></li></ul></div><div class="widget"><div class="widget-title"><i class="fa fa-external-link"> 友情链接</i></div><ul></ul><a href="https://github.com/meteorOSS/wechat-bc" title="wechat-bc(类似开发公众号一样，开发个人微信号)" target="_blank">wechat-bc(类似开发公众号一样，开发个人微信号)</a></div></div></div><div class="pure-u-1 pure-u-md-3-4"><div id="footer">Copyright © 2025 <a href="/." rel="nofollow">meteor(zsh).</a> Powered by<a rel="nofollow" target="_blank" href="https://hexo.io"> Hexo.</a><a rel="nofollow" target="_blank" href="https://github.com/tufu9441/maupassant-hexo"> Theme</a> by<a rel="nofollow" target="_blank" href="https://github.com/pagecho"> Cho.</a></div></div></div><a class="show" id="rocket" href="#top"></a><script type="text/javascript" src="/js/totop.js?v=1.0.0" async></script><script type="text/javascript" src="//lib.baomitu.com/fancybox/latest/jquery.fancybox.min.js"></script><script type="text/javascript" src="/js/fancybox.js?v=1.0.0"></script><link rel="stylesheet" type="text/css" href="//lib.baomitu.com/fancybox/latest/jquery.fancybox.min.css"><script type="text/javascript" src="/js/copycode.js?v=1.0.0" successtext="复制成功！"></script><link rel="stylesheet" type="text/css" href="/css/copycode.css?v=1.0.0"><script type="text/javascript" src="/js/codeblock-resizer.js?v=1.0.0"></script><script type="text/javascript" src="/js/smartresize.js?v=1.0.0"></script></div></body></html>

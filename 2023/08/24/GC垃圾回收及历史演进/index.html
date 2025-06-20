@@ -1,0 +1,115 @@
+<!DOCTYPE html><html lang="en"><head><meta http-equiv="content-type" content="text/html; charset=utf-8"><meta content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=0" name="viewport"><meta content="yes" name="apple-mobile-web-app-capable"><meta content="black-translucent" name="apple-mobile-web-app-status-bar-style"><meta content="telephone=no" name="format-detection"><meta name="description" content="zsh-blog"><title>GC垃圾回收及历史演进 | meteor(zsh)</title><link rel="stylesheet" type="text/css" href="/css/style.css?v=1.0.0"><link rel="stylesheet" type="text/css" href="//lib.baomitu.com/normalize/latest/normalize.min.css"><link rel="stylesheet" type="text/css" href="//lib.baomitu.com/pure/latest/pure-min.min.css"><link rel="stylesheet" type="text/css" href="//lib.baomitu.com/pure/latest/grids-responsive-min.min.css"><link rel="stylesheet" href="//lib.baomitu.com/font-awesome/4.7.0/css/font-awesome.min.css"><script type="text/javascript" src="//lib.baomitu.com/jquery/latest/jquery.min.js"></script><link rel="icon" mask="" sizes="any" href="/favicon.ico"><link rel="Shortcut Icon" type="image/x-icon" href="/favicon.ico"><link rel="apple-touch-icon" href="/apple-touch-icon.png"><link rel="apple-touch-icon-precomposed" href="/apple-touch-icon.png"><script type="text/javascript" src="//lib.baomitu.com/clipboard.js/latest/clipboard.min.js"></script><script type="text/javascript" src="//lib.baomitu.com/toastr.js/latest/toastr.min.js"></script><link rel="stylesheet" href="//lib.baomitu.com/toastr.js/latest/toastr.min.css"><div class="darkmode-toggle">🌓</div><script>var prefersDarkMode = window.matchMedia('(prefers-color-scheme: dark)');
+var toggle = document.querySelector('.darkmode-toggle');
+var html = document.querySelector('html');
+
+html.dataset.dark = localStorage.dark || prefersDarkMode.matches;
+
+toggle.addEventListener('click', () => {
+localStorage.dark = !(html.dataset.dark == 'true');
+html.dataset.dark = localStorage.dark;
+});</script><meta name="generator" content="Hexo 7.3.0"></head><body><div class="body_container"><div id="header"><div class="site-name"><h1 class="hidden">GC垃圾回收及历史演进</h1><a id="logo" href="/.">meteor(zsh)</a><p class="description"></p></div><div id="nav-menu"><a class="current" href="/."><i class="fa fa-home"> 首页</i></a><a href="/archives/"><i class="fa fa-archive"> 归档</i></a><a href="/about/"><i class="fa fa-user"> 简历</i></a><a href="/atom.xml"><i class="fa fa-rss"> 订阅</i></a></div></div><div class="pure-g" id="layout"><div class="pure-u-1 pure-u-md-3-4"><div class="content_container"><div class="post"><h1 class="post-title">GC垃圾回收及历史演进</h1><div class="post-meta">2023-08-24<script src="https://busuanzi.ibruce.info/busuanzi/2.3/busuanzi.pure.mini.js" async></script><span id="busuanzi_container_page_pv"> | <span id="busuanzi_value_page_pv"></span><span> 阅读</span></span><span class="post-time"><span class="post-meta-item-text"> | </span><span class="post-meta-item-icon"><i class="fa fa-keyboard-o"></i><span class="post-count"> 2.8k</span><span class="post-meta-item-text"> 字</span></span></span><span class="post-time"> | <span class="post-meta-item-icon"><i class="fa fa-clock-o"></i><span class="post-count"> 9</span><span class="post-meta-item-text"> 分钟</span></span></span></div><div class="post-content"><h1 id="GC及历史演进"><a href="#GC及历史演进" class="headerlink" title="GC及历史演进"></a>GC及历史演进</h1><h1 id="栈和堆"><a href="#栈和堆" class="headerlink" title="栈和堆"></a>栈和堆</h1><p>在程序开发中最难以调试的问题莫过于野指针和并发问题。</p>
+<p>野指针即是同一个对象，有着多个指针引用，当对象在某一处释放掉了而另一处还不知情依旧使用;或者是不再指向任何对象的指针，也是在java中最为经典的NullPointerExcetion</p>
+<p>那么它是怎么产生的呢？大多语言在运行期间内存中的表现都有着栈，堆这两个概念</p>
+<p>如下面这段代码</p>
+<figure class="highlight java"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br></pre></td><td class="code"><pre><span class="line"><span class="keyword">public</span> <span class="keyword">class</span> <span class="title class_">Test</span>&#123;</span><br><span class="line">    <span class="keyword">static</span> <span class="keyword">void</span> <span class="title function_">print</span><span class="params">(Object o)</span>&#123;</span><br><span class="line">       <span class="type">Object</span> <span class="variable">p</span> <span class="operator">=</span> o;</span><br><span class="line">       out(p);</span><br><span class="line">    &#125;</span><br><span class="line">    <span class="keyword">public</span> <span class="keyword">static</span> <span class="keyword">void</span> <span class="title function_">main</span><span class="params">(String[] args)</span>&#123;</span><br><span class="line">        <span class="type">Object</span> <span class="variable">o</span> <span class="operator">=</span> <span class="keyword">new</span> <span class="title class_">Object</span>();</span><br><span class="line">        print(o);</span><br><span class="line">    &#125;</span><br><span class="line">&#125;</span><br></pre></td></tr></table></figure>
+
+<p><img src="http://cdn.zsenhe.com/688d2f90076148f3801b99df09ce644c" alt="20230825003845image.png"></p>
+<p>如对于java，每个线程对应一个栈，栈中存放着方法的路径引用，而堆是作为动态分配的区域，存放着不同指针指向的实际资源。</p>
+<p>对于图中指针o,p的引用，如果在print之前发生了其他事（如指向的对象在堆中被其他数据覆盖，或是print之前释放掉了o指向的资源…..)，就会造成空指针或野指针的问题</p>
+<p>再来说说并发问题，这个就是老生常谈了，即多个线程栈同时访问一块内存空间</p>
+<p>如果单一的问题还不是最糟糕，那么两者结合就是地狱了</p>
+<h2 id="语言的发展历史"><a href="#语言的发展历史" class="headerlink" title="语言的发展历史"></a>语言的发展历史</h2><p>语言的发展很大原因是这两部分在推进，最开始c&#x2F;c++使用手动管理内存，通过malloc()申请内存，使用后通过free()释放掉，但程序不是一条路走到黑，它可能有着数以上百的运行分支，那么释放内存分配内存的时机会造成各种各样的bug。如忘记释放造成内存泄漏，释放多次，野指针满天飞等情况</p>
+<p>于是，紧跟着产出了一些内存管理方便的语言，如Go&#x2F;Python&#x2F;Java。当然并不是说就完全没有了野指针空指针等问题，而是引入了GC的概念-Gabarge Collector。也就是垃圾收集器</p>
+<p>以前我们不止需要分配对象，还得负责释放对象，而GC的引入便是负责了后者的工作，我们只管分配，回收释放的工作交给GC，极大的提升了开发效率</p>
+<p>别高兴的太早了，不管是java还是go，依然没有解决空指针野指针的问题。虽然在java中有着Options等处理空指针的类，但根本上并没有解决，我们的代码中还是充斥着大量的if(obj!&#x3D;null)。而且gc会占用cpu资源，这导致它们的执行效率不如c&#x2F;c++</p>
+<h2 id="什么是垃圾-garbage"><a href="#什么是垃圾-garbage" class="headerlink" title="什么是垃圾(garbage)?"></a>什么是垃圾(garbage)?</h2><p>既然将内存释放的工作交给GC了，那么怎么定义垃圾呢?在程序运行过程中，没有任何指针引用的肯定就是垃圾了，但怎么定位垃圾呢，其中有多种方式</p>
+<blockquote>
+<p>Reference count 引用计数法</p>
+<p>它的核心思维是使用一个计数器来标识对象被多少个指针所使用，当为0时即确定为垃圾进行回收。</p>
+</blockquote>
+<p>python就使用了这种方式，但引入计数法存在着问题</p>
+<p><img src="http://cdn.zsenhe.com/4533794e9ba44bb4a849a3f8e19760fa" alt="20230825011638image.png"></p>
+<p>如上图这样的情况，三个对象都引用了另一个对象，但没有任何外部指针来引用其中的一个</p>
+<p>这样三个垃圾互相指向，如果使用计数法无法定位其中任何一个垃圾，所以java并没有采用这样的方式</p>
+<blockquote>
+<p>Root Searching 根可达算法</p>
+<p>java采用的是根可达算法，其通过一系列名为”Gc Roots”的对象作为出发点，从这些节点开始往下搜索，搜索走过的路径称为引用链，当一个对象到Gcroots没有任何引用链相连时，则证明该对象是不可用的</p>
+</blockquote>
+<p>其中能作为根节点的对象有很多</p>
+<blockquote>
+<p>(1). 虚拟机栈（栈帧中的局部变量区，也叫做局部变量表）中引用的对象。</p>
+<p>(2). 方法区中的类静态属性引用的对象。</p>
+<p>(3). 方法区中常量引用的对象。</p>
+<p>(4). 本地方法栈中JNI(Native方法)引用的对象。</p>
+</blockquote>
+<p>其中任何一项拎出来都能啃半天，最简单的即是，main入口方法中任何变量都能算根</p>
+<h2 id="常用的垃圾回收算法和垃圾回收器"><a href="#常用的垃圾回收算法和垃圾回收器" class="headerlink" title="常用的垃圾回收算法和垃圾回收器"></a>常用的垃圾回收算法和垃圾回收器</h2><p>当我们知道了什么是垃圾后，就得把它清掉了，常见的垃圾清除算法有三种</p>
+<blockquote>
+<p>Mark-Sweep标记清除</p>
+<p>它分为标记和清除两个阶段，通过根可达算法标记所有的垃圾，在标记完成后统一进行清除。</p>
+<p><img src="http://cdn.zsenhe.com/eff08c7df7ea4eaa90e66bc91629eb43" alt="20230825014059image.png"></p>
+<p>这种清除方式有一个问题，那就是在多次标记清除之后，内存碎片化严重，当一次性需要分配大块的内存空间时，会触发新一次的垃圾收集动作</p>
+</blockquote>
+<hr>
+<blockquote>
+<p>Copying 复制算法</p>
+<p>复制算法针对标记清除算法的缺点，在其基础上进行了改进。它将内存可用容量分割为大小相等的两块，每次只使用其中一块，当上面的内存用完了，将存活的对象复制到另一块中，再把原先已使用的内存进行一次性清除</p>
+<p><img src="http://cdn.zsenhe.com/a687ae7cdc95458c8ef103f93c83eae7" alt="20230825015336image.png"></p>
+<p>它的缺点也很明显，每次只是用1&#x2F;2，可用内存少了整整一半！</p>
+</blockquote>
+<p>为了解决copying算法的缺陷，充分利用内存空间，提出了Mark-Compact算法</p>
+<blockquote>
+<p>标记-整理算法 (Mark-Compact)</p>
+<p>该算法标记阶段和Mark-Sweep一样，但不同的是在标记完成之后会闲将存活对象都向一端移动，然后清理存活对象边界以外的垃圾</p>
+<p><img src="http://cdn.zsenhe.com/e6b1bc5cdbf24862986a545ee713a329" alt="20230825015716image.png"></p>
+<p>当然，缺点就是效率比其他两种低了很多，毕竟除了标记动作，还得进行存活对象的排列移动</p>
+</blockquote>
+<p>那么jvm的GC是怎么做的呢？如果将内存当做只有一块可使用的话，三种算法都有缺点。jvm将一整块内存区域划分为不同的块综合应用不同的回收算法</p>
+<h2 id="GC垃圾回收器的演化过程"><a href="#GC垃圾回收器的演化过程" class="headerlink" title="GC垃圾回收器的演化过程"></a>GC垃圾回收器的演化过程</h2><p>jvm将堆内存分区为 新生代（new) 和老年代(old)</p>
+<p><img src="http://cdn.zsenhe.com/8e2b076dac904c3783103c7b1b40ff82" alt="20230825020358image.png"></p>
+<p>刚诞生的对象优先往新生代存放，每个对象都有自己的“年龄”，当新生代中的对象经历过一次垃圾回收后还存活，那么它的年龄+1，当其年龄超过某个阈值，那么就是老东西了，往老年代移动</p>
+<p>在新生代中采用Copying算法，老年代采用Mark-Compact算法</p>
+<p>新生代中的垃圾回收称为YG，一次性的回收可能回收到90%的对象，100个对象我只剩下10个对象存活，只分成两块是不是太浪费了？于是在分代模型中，比例为8:1:1，占8成的区域称为伊甸(eden)，生命诞生的地方，刚分配的对象会被存放在这里，垃圾回收后存活的存放至占1的survivor区域，伊甸剩下的对象全部清除，在下一次回收中，同时扫描前两个区域，存活的对象搬至第二个Survivor，如此往复。装不下了或是年龄到某个阈值了，迁到老年。当老年代区域满了会触发全区的gc</p>
+<p>说回垃圾收集器，GC的演化随着内存大小的不断增进而推进</p>
+<p>在只有几m到几十m的时候，只需要Serial收集器</p>
+<blockquote>
+<p><img src="http://cdn.zsenhe.com/3fa74a6ffb4e4e3d979c0c7097fcda70" alt="20230825023056image.png"></p>
+<p>Serial收集器</p>
+<p>Serial(串行)收集器是历史最悠久的垃圾收集器。在jdk1.3之前它是年轻代唯一的收集器，它是一个单线程收集器，它只会使用一条垃圾收集线程去完成工作，在它工作的时候会暂停掉所有的工作线程，称为STW（Stop The World），直到它收集结束世界才会重启</p>
+<p>这也意味着它在工作的时候会给用户带来卡顿现象造成不良的体验，由于没有线程之间的交互开销，自然可以获得高效的效率</p>
+</blockquote>
+<p>Serial收集器在老年代和新生代的工作方式相同，不同的只是在年轻代中使用复制算法，后者则使用标记-整理算法</p>
+<p>后面内存增长到上百兆甚至1G了，如果依然使用Serial收集器，那可能得忍受程序暂停半小时这样的问题，这个时候ParNew出现了，它采用了多线程并行的垃圾收集</p>
+<p>工作在年轻代的ParNew叫做Parallel Scavenge，工作在老年代的ParNew称为Parallel Old。简称PS+PO，在1.8中，如果没有过任何设置，这是默认的垃圾回收器方案</p>
+<p>ParNew不止使用了多线程提高效率，它更关注的是吞吐量（高效率的利用CPU，也指系统在一个单位时间内可承受的请求数量，表现了系统的承压能力）</p>
+<p>慢慢的，内存增长到了上百G，这个时候发现想要提高垃圾回收的效率就牵扯到了操作系统的一个问题</p>
+<blockquote>
+<p>线程数越多效率就越高吗？</p>
+</blockquote>
+<p>答案是不一定，多线程并不意味着真正的同时运行。而是cpu时间片的切换，一个cpu同时只能运行一个线程，16核的cpu同时运行16个线程，这个时候你来了一百个线程，徒增了许多切换的开销不说，对效率并没有作用，甚至线程切换所占的资源超过了线程运行。</p>
+<p>所以到了这个时候，增加多的线程并不会提高多大的效率，这个时候，诞生了</p>
+<blockquote>
+<p>Concurrent GC</p>
+</blockquote>
+<p>后面所产生的包括CMS，G1，ZGC都来自于Concureent</p>
+<p>Concurrent让GC线程和工作线程可以同时运行，也就是并发。在这之前，GC一运行其他工作线程都得STW。也可以理解为，程序一边工作GC一边清理垃圾</p>
+<p>这就是GC回收的历史演进了，当掌握了大概的体系，后面就可以开始对细节的探究及调优了</p>
+<p>参考:</p>
+<p><a target="_blank" rel="noopener" href="https://www.bookstack.cn/read/gc-handbook/">介绍 - 《GC参考手册-Java版》 - 书栈网 · BookStack</a></p>
+<p><a target="_blank" rel="noopener" href="https://www.bilibili.com/video/BV1fe411A7JQ">JVM调优实战1-7p</a></p>
+<p><a target="_blank" rel="noopener" href="https://blog.csdn.net/hyb612/article/details/103777129">多线程就一定快吗？天真！_线程越多越快吗_守望之名的博客-CSDN博客</a></p>
+<p><a target="_blank" rel="noopener" href="https://blog.csdn.net/qq522044637/article/details/124863705">什么是QPS、TPS、吞吐量？- 高并发名词概念_吞吐量qps_一边学习一边哭的博客-CSDN博客</a></p>
+<p><a target="_blank" rel="noopener" href="https://blog.csdn.net/ccuaman/article/details/107067222">垃圾回收的三种算法_垃圾回收算法_vvuz2的博客-CSDN博客</a></p>
+<p><a target="_blank" rel="noopener" href="https://blog.csdn.net/qq_39691723/article/details/121379180">根可达性算法：是什么、怎么做、为什么_根可达算法_键盘上のDancer的博客-CSDN博客</a></p>
+<p><a target="_blank" rel="noopener" href="https://blog.csdn.net/W_J_F_/article/details/82778565">C++ ：引用计数(reference count) 实现_c++引用计数的实现_WangJ_F_的博客-CSDN博客</a></p>
+</div><div id="donate"><link rel="stylesheet" type="text/css" href="/css/donate.css?v=1.0.0"><script type="text/javascript" src="/js/donate.js?v=1.0.0" successtext="复制成功！"></script><a class="pos-f tr3" id="github" href="https://github.com/meteorOSS" target="_blank" title="Github"></a><div id="DonateText">Donate</div><ul class="list pos-f" id="donateBox"><li id="AliPay" qr="/img/alipay.png"></li><li id="WeChat" qr="/img/wechatqrcode.png"></li></ul><div class="pos-f left-100" id="QRBox"><div id="MainBox"></div></div></div><div class="post-copyright"><script type="text/javascript" src="/js/copyright.js?v=1.0.0" successtext="复制成功！"></script><link rel="stylesheet" type="text/css" href="/css/copyright.css?v=1.0.0"><p><span>本文标题：</span>GC垃圾回收及历史演进</p><p><span>文章作者：</span>meteor</p><p><span>发布时间：</span>2023-08-24</p><p><span>最后更新：</span>2023-08-24</p><p><span>原始链接：</span><a href="/2023/08/24/GC垃圾回收及历史演进/">http://blog.zsenhe.com/2023/08/24/GC%E5%9E%83%E5%9C%BE%E5%9B%9E%E6%94%B6%E5%8F%8A%E5%8E%86%E5%8F%B2%E6%BC%94%E8%BF%9B/</a><span class="copy-path"><i class="fa fa-clipboard" data-clipboard-text="http://blog.zsenhe.com/2023/08/24/GC%E5%9E%83%E5%9C%BE%E5%9B%9E%E6%94%B6%E5%8F%8A%E5%8E%86%E5%8F%B2%E6%BC%94%E8%BF%9B/"></i></span></p><p><span>版权声明：</span>本博客所有文章除特别声明外，均采用 <a href="http://creativecommons.org/licenses/by-nc-sa/3.0/cn/" rel="external nofollow" target="_blank">CC BY-NC-SA 3.0 CN</a> 许可协议。转载请注明出处！</p></div><br><script type="text/javascript" src="/js/share.js?v=1.0.0" async></script><a class="article-share-link" data-url="http://blog.zsenhe.com/2023/08/24/GC%E5%9E%83%E5%9C%BE%E5%9B%9E%E6%94%B6%E5%8F%8A%E5%8E%86%E5%8F%B2%E6%BC%94%E8%BF%9B/" data-id="cltjxfwgr0003i4v13pefg68m" data-qrcode="data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAQ4AAAEOCAAAAABd2qZ5AAAD60lEQVR42u3aUXLqQAwEQO5/aXIAiJmR1lRS1f56RR5m3XwISfN4xNfz5Xr9a/v/X//6vLzyE/52qmMXDhw4cOAoHzU/6G93m31ijpuftobGgQMHDhyHOK4f7PohE6CW+PrxktMm58eBAwcOHP+Xo31vjnhdnnHgwIEDx//luC54+Zgvf2/+NeDAgQMHju9zzAZ2+ce3JXN2hwMLLRw4cODAcT4bUJfSv//vW/IdOHDgwIGjTIW17VPbvLWFdtaeFU+HAwcOHDgOFYo23JaHBva/Ambt3Oa5cODAgQPHHRztKC0voknhbF9pl1IfzoMDBw4cOBYctVzQSuXN22Z91cYsouYTBw4cOHCsOU4N1zYhhrZAbl6PBpE4cODAgWPB0RbathnLC+2+RZwtyaKxIA4cOHDgKDlmbVIbUEvKcx5xaF+JBoU4cODAgeMoR7tkygNts/LcRis2Jb9IDuLAgQMHjoAjL1Szh2lHirOYXdv+vXkFBw4cOHCsOWbjuXYFlRS8WTnPh4B5G4kDBw4cOPYcszjCPgDRDg1n5XPYZOLAgQMHjkMcs2YpL4T5sG8D19LgwIEDB447ONpylQwWZ0ujfUs5g8aBAwcOHKc48hJ7TH1dyPefeKB5w4EDBw4cL3fIB2ezKPZsCdTGKfaBDBw4cODAcYojL29503UHZbsAy89fb+Fw4MCBA8clR/6Rm2FfO9Rre9BZIY9+WeDAgQMHjgXHY3HlK6jNuPBYe7bPdODAgQMHjjjE0EYTih6x/BraMj9r+T70sjhw4MCBYx2SywvYZlw4eyUPOuSrr+g3CA4cOHDgGHFsHrU9ekJ/qr1saXDgwIEDx4ajLWPJrTdrqrwtTNq2uk3FgQMHDhxrjvzhZ6V000q1xbhFGW6lcODAgQNHPPWatUD5+icHau+T03xoFHHgwIEDx1GONjQwDKKNiJNVU7uUevM6Dhw4cOBYc7SrpjaykNBsWsf8VDUTDhw4cOAYcbTtUBI1mD1GW9rzOEWxGMOBAwcOHIc4Vqm6oEi3X8CmgWx/ZbwZDuLAgQMHjjVHUvBmRbQNPbSN32x9Fc1KceDAgQPHIjO2X/C04YZ2ZXX3SgwHDhw4cJy6/7O86qaoHEHOQm95+1eUWBw4cODAMeLIr1NwbTuXYG3axbw848CBAweOnGNTXDdAbes1Cz0khRYHDhw4cNzB0cYUkoLaLpNy7tWvhuv34sCBAweOr3O0a6EZdD7+yyMO0ReDAwcOHDi+ztEO+zYlPI/u7UeEOHDgwIHjLMcm1nx2PLeJUGxOiAMHDhw4TnHko7RixBZDJ2W4XXolJ1kF5nDgwIEDx/u7/QDEoAttTnTp+AAAAABJRU5ErkJggg==">分享</a><div class="tags"></div><div class="post-nav"><a class="pre" href="/2023/08/25/CMS%E4%B8%8E%E4%B8%89%E8%89%B2%E6%A0%87%E8%AE%B0%E7%AE%97%E6%B3%95/">CMS与三色标记算法</a><a class="next" href="/2023/08/18/1.16+%E7%9A%84forge%E4%B8%8Ebukkit%E9%80%9A%E4%BF%A1/">1.16+的forge与bukkit通信</a></div><div id="container"></div><link rel="stylesheet" type="text/css" href="//unpkg.com/gitalk/dist/gitalk.css"><script type="text/javascript" src="//cdn.bootcss.com/blueimp-md5/2.10.0/js/md5.js"></script><script type="text/javascript" src="//unpkg.com/gitalk/dist/gitalk.min.js"></script><script>var gitalk = new Gitalk({
+  clientID: 'fc8322a9d1f9189c3ef4',
+  clientSecret: '7751271047d80dd7010063d51400bbbcb9dd3e69',
+  repo: 'meteorOSS.github.io',
+  owner: 'meteoross',
+  admin: ['meteoross'],
+  id: md5(location.pathname),
+  distractionFreeMode: false
+})
+gitalk.render('container')
+</script></div></div></div><div class="pure-u-1-4 hidden_mid_and_down"><div id="sidebar"><div class="widget"><form class="search-form" action="//www.google.com/search" method="get" accept-charset="utf-8" target="_blank"><input type="text" name="q" maxlength="20" placeholder="Search"/><input type="hidden" name="sitesearch" value="http://blog.zsenhe.com"/></form></div><div class="widget"><div class="author-info"><a class="info-avatar" href="/about/" title="简历"><img class="nofancybox" src="/img/avatar.png"/></a><p>我躺在柔软的床上冥想着没有时间的空间</p><a class="info-icon" href="https://twitter.com/username" title="Twitter" target="_blank" style="margin-inline:5px"> <i class="fa fa-twitter-square" style="margin-inline:5px"></i></a><a class="info-icon" href="mailto:zhengsenhe1027@126.com" title="Email" target="_blank" style="margin-inline:5px"> <i class="fa fa-envelope-square" style="margin-inline:5px"></i></a><a class="info-icon" href="https://github.com/meteorOSS" title="Github" target="_blank" style="margin-inline:5px"> <i class="fa fa-github-square" style="margin-inline:5px"></i></a><a class="info-icon" href="/atom.xml" title="RSS" target="_blank" style="margin-inline:5px"> <i class="fa fa-rss-square" style="margin-inline:5px"></i></a></div></div><div class="widget"><div class="widget-title"><i class="fa fa-folder-o"> 分类</i></div></div><div class="widget"><div class="widget-title"><i class="fa fa-star-o"> 标签</i></div><div class="tagcloud"></div></div><div class="widget"><div class="widget-title"><i class="fa fa-file-o"> 最近文章</i></div><ul class="post-list"><li class="post-list-item"><a class="post-list-link" href="/2024/03/07/hello-world/">我将博客迁移到了这里</a></li><li class="post-list-item"><a class="post-list-link" href="/2023/12/05/%E8%BF%90%E8%A1%8C%E6%97%B6%E5%8A%A8%E6%80%81%E8%BD%BD%E5%85%A5%E4%BE%9D%E8%B5%96/">运行时动态载入依赖</a></li><li class="post-list-item"><a class="post-list-link" href="/2023/11/29/GoReplaceTool%20%E6%8C%87%E5%AE%9A%E7%9B%AE%E6%A0%87%E7%9B%AE%E5%BD%95%E6%89%B9%E9%87%8F%E6%9B%BF%E6%8D%A2%E5%B7%A5%E5%85%B7/">GoReplaceTool 指定目标目录批量替换工具</a></li><li class="post-list-item"><a class="post-list-link" href="/2023/10/26/XPath%E4%B8%8EMyBatis%E8%A7%A3%E6%9E%90%E5%99%A8%E6%A8%A1%E5%9D%97XPathParser/">XPath与MyBatis解析器模块XPathParser</a></li><li class="post-list-item"><a class="post-list-link" href="/2023/10/26/XML%E5%B8%B8%E8%A7%81%E7%9A%84%E8%A7%A3%E6%9E%90%E6%96%B9%E5%BC%8F/">XML常见的解析方式</a></li><li class="post-list-item"><a class="post-list-link" href="/2023/10/06/%E4%B8%80%E5%9D%97%E9%92%B1%E6%8E%89%E5%9C%B0%E4%B8%8A%EF%BC%8C%E7%A2%8E%E6%88%90%E4%BA%86%E4%B8%A4%E5%BC%A0%E4%BA%94%E6%AF%9B/">一块钱掉地上，碎成了两张五毛</a></li><li class="post-list-item"><a class="post-list-link" href="/2023/09/10/%E8%AF%A5%E6%AD%BB%E7%9A%84%E5%8F%8D%E5%B0%84%E8%AF%A5%E6%AD%BB%E7%9A%84%E5%8F%8D%E5%B0%84%E8%AF%A5%E6%AD%BB%E7%9A%84%E5%8F%8D%E5%B0%84%E8%AF%A5%E6%AD%BB%E7%9A%84%E5%8F%8D%E5%B0%84%E8%AF%A5%E6%AD%BB%E7%9A%84%E5%8F%8D%E5%B0%84/">该死的反射该死的反射该死的反射该死的反射该死的反射</a></li><li class="post-list-item"><a class="post-list-link" href="/2023/08/31/%E5%9F%BA%E4%BA%8E%E7%88%B1%E5%8F%91%E7%94%B5%E7%9A%84spigot%E6%9C%8D%E5%8A%A1%E5%99%A8%E8%87%AA%E5%8A%A8%E5%85%85%E5%80%BC%E5%8F%91%E8%B4%A7/">基于爱发电的spigot服务器自动充值发货</a></li><li class="post-list-item"><a class="post-list-link" href="/2023/08/25/CMS%E4%B8%8E%E4%B8%89%E8%89%B2%E6%A0%87%E8%AE%B0%E7%AE%97%E6%B3%95/">CMS与三色标记算法</a></li><li class="post-list-item"><a class="post-list-link" href="/2023/08/24/GC%E5%9E%83%E5%9C%BE%E5%9B%9E%E6%94%B6%E5%8F%8A%E5%8E%86%E5%8F%B2%E6%BC%94%E8%BF%9B/">GC垃圾回收及历史演进</a></li></ul></div><div class="widget"><div class="widget-title"><i class="fa fa-external-link"> 友情链接</i></div><ul></ul><a href="https://github.com/meteorOSS/wechat-bc" title="wechat-bc(类似开发公众号一样，开发个人微信号)" target="_blank">wechat-bc(类似开发公众号一样，开发个人微信号)</a></div></div></div><div class="pure-u-1 pure-u-md-3-4"><div id="footer">Copyright © 2025 <a href="/." rel="nofollow">meteor(zsh).</a> Powered by<a rel="nofollow" target="_blank" href="https://hexo.io"> Hexo.</a><a rel="nofollow" target="_blank" href="https://github.com/tufu9441/maupassant-hexo"> Theme</a> by<a rel="nofollow" target="_blank" href="https://github.com/pagecho"> Cho.</a></div></div></div><a class="show" id="rocket" href="#top"></a><script type="text/javascript" src="/js/totop.js?v=1.0.0" async></script><script type="text/javascript" src="//lib.baomitu.com/fancybox/latest/jquery.fancybox.min.js"></script><script type="text/javascript" src="/js/fancybox.js?v=1.0.0"></script><link rel="stylesheet" type="text/css" href="//lib.baomitu.com/fancybox/latest/jquery.fancybox.min.css"><script type="text/javascript" src="/js/copycode.js?v=1.0.0" successtext="复制成功！"></script><link rel="stylesheet" type="text/css" href="/css/copycode.css?v=1.0.0"><script type="text/javascript" src="/js/codeblock-resizer.js?v=1.0.0"></script><script type="text/javascript" src="/js/smartresize.js?v=1.0.0"></script></div></body></html>
